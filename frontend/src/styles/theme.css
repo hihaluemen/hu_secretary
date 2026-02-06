@@ -1,0 +1,26 @@
+:root {
+  --primary-color: #0891b2;
+  --secondary-color: #22d3ee;
+  --cta-color: #22c55e;
+  --bg-color: #ecfeff;
+  --text-color: #164e63;
+  --text-muted: #3c6e7a;
+  --border-color: #cdebf3;
+  --card-shadow: 0 2px 8px rgba(8, 145, 178, 0.08);
+  --font-heading: 'Lexend', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-body: 'Source Sans 3', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--text-color);
+}
+
+button {
+  font-family: inherit;
+}
