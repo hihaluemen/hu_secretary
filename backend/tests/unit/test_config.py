@@ -26,3 +26,7 @@ def test_openai_provider_resolution():
     assert settings.llm_base_url == "https://api.openai.com/v1"
     assert settings.llm_model == "gpt-4o-mini"
 
+
+def test_reminder_timezone_fallback():
+    settings = Settings(REMINDER_TIMEZONE="Invalid/Timezone")
+    assert settings.reminder_timezone.key == "Asia/Shanghai"

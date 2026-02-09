@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia'
 
 import { processAssistant } from '../api/assistant'
+import { transcribeAudio } from '../api/asr'
 import { fetchEvents, resetDemoEvents } from '../api/events'
+import { fetchTomorrowReminders } from '../api/reminders'
+
+const hasObjectUrlApi = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+const hasRevokeObjectUrlApi = typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function'
 
 const SAMPLE_INPUTS = {
   add: '明天上午9点在政务办和李总开项目启动会，提醒我带上项目计划书。',
@@ -21,6 +26,12 @@ export const useDemoStore = defineStore('demo', {
     events: [],
     requestHistory: [],
     runLogs: [],
+    audioBlob: null,
+    audioMimeType: '',
+    audioObjectUrl: '',
+    asrText: '',
+    remindersLoading: false,
+    tomorrowReminders: [],
   }),
   getters: {
     hasProcessResult: (state) => !!state.processResult,
@@ -32,7 +43,7 @@ export const useDemoStore = defineStore('demo', {
       this.inputText = SAMPLE_INPUTS[type] || ''
     },
     async runProcess() {
-      if (!this.inputText.trim()) {
+      if (!this.inputText.trim() && !this.audioBlob) {
         this.errorMessage = '请输入待处理内容'
         return
       }
@@ -40,16 +51,41 @@ export const useDemoStore = defineStore('demo', {
       this.errorMessage = ''
       const startedAt = performance.now()
       try {
+        let finalInputText = this.inputText
+        this.asrText = ''
+
+        if (this.audioBlob) {
+          const audioName = this.audioMimeType.includes('wav') ? 'recording.wav' : 'recording.webm'
+          const file = new File([this.audioBlob], audioName, {
+            type: this.audioMimeType || 'audio/webm',
+          })
+          const asrResult = await transcribeAudio({
+            file,
+            userId: this.userId,
+          })
+          this.asrText = asrResult?.text || ''
+          finalInputText = this.asrText
+          this.runLogs.unshift({
+            at: new Date().toISOString(),
+            stage: 'asr.transcribe',
+            status: 'success',
+            message: `语音识别完成，获得 ${this.asrText.length} 字`,
+          })
+          if (!finalInputText.trim()) {
+            throw new Error('语音识别结果为空，请重试')
+          }
+        }
+
         const payload = {
           user_id: this.userId,
-          text: this.inputText,
+          text: finalInputText,
           dry_run: this.dryRun,
         }
         const result = await processAssistant(payload)
         this.processResult = result
         const elapsed = Math.round(performance.now() - startedAt)
         this.requestHistory.unshift({
-          input: this.inputText,
+          input: finalInputText,
           at: new Date().toISOString(),
           normalized: result.normalized_input,
           elapsed,
@@ -61,8 +97,17 @@ export const useDemoStore = defineStore('demo', {
           message: `处理完成，耗时 ${elapsed}ms`,
         })
         await this.loadEvents()
+        await this.loadTomorrowReminders()
       } catch (error) {
         this.errorMessage = error.message
+        if (this.audioBlob && !this.asrText) {
+          this.runLogs.unshift({
+            at: new Date().toISOString(),
+            stage: 'asr.transcribe',
+            status: 'error',
+            message: error.message,
+          })
+        }
         this.runLogs.unshift({
           at: new Date().toISOString(),
           stage: 'assistant.process',
@@ -96,12 +141,36 @@ export const useDemoStore = defineStore('demo', {
         this.eventsLoading = false
       }
     },
+    async loadTomorrowReminders() {
+      this.remindersLoading = true
+      try {
+        const data = await fetchTomorrowReminders({ user_id: this.userId })
+        this.tomorrowReminders = data?.items || []
+        this.runLogs.unshift({
+          at: new Date().toISOString(),
+          stage: 'reminders.tomorrow',
+          status: 'success',
+          message: `已加载 ${this.tomorrowReminders.length} 条明日提醒`,
+        })
+      } catch (error) {
+        this.errorMessage = error.message
+        this.runLogs.unshift({
+          at: new Date().toISOString(),
+          stage: 'reminders.tomorrow',
+          status: 'error',
+          message: error.message,
+        })
+      } finally {
+        this.remindersLoading = false
+      }
+    },
     async resetDemoData() {
       this.loading = true
       this.errorMessage = ''
       try {
         await resetDemoEvents({ user_id: this.userId })
         this.processResult = null
+        this.clearAudioPayload()
         this.requestHistory = []
         this.runLogs.unshift({
           at: new Date().toISOString(),
@@ -110,6 +179,7 @@ export const useDemoStore = defineStore('demo', {
           message: '演示数据已重置',
         })
         await this.loadEvents()
+        await this.loadTomorrowReminders()
       } catch (error) {
         this.errorMessage = error.message
         this.runLogs.unshift({
@@ -163,6 +233,36 @@ export const useDemoStore = defineStore('demo', {
         stage: 'assistant.export',
         status: 'success',
         message: '当前结果已导出 JSON',
+      })
+    },
+    setAudioPayload({ blob, mimeType }) {
+      this.audioBlob = blob
+      this.audioMimeType = mimeType || ''
+      this.asrText = ''
+      if (this.audioObjectUrl && hasRevokeObjectUrlApi) {
+        URL.revokeObjectURL(this.audioObjectUrl)
+      }
+      this.audioObjectUrl = blob && hasObjectUrlApi ? URL.createObjectURL(blob) : ''
+      this.runLogs.unshift({
+        at: new Date().toISOString(),
+        stage: 'audio.record',
+        status: 'success',
+        message: blob ? '录音已就绪，可执行处理' : '录音已清除',
+      })
+    },
+    clearAudioPayload() {
+      this.audioBlob = null
+      this.audioMimeType = ''
+      this.asrText = ''
+      if (this.audioObjectUrl && hasRevokeObjectUrlApi) {
+        URL.revokeObjectURL(this.audioObjectUrl)
+      }
+      this.audioObjectUrl = ''
+      this.runLogs.unshift({
+        at: new Date().toISOString(),
+        stage: 'audio.record',
+        status: 'success',
+        message: '录音已清除',
       })
     },
   },

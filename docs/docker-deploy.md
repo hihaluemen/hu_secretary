@@ -38,6 +38,12 @@ cp .env.example .env
 | `MYSQL_PASSWORD` | 读取 `.env` 中 `MYSQL_PASSWORD` | MySQL 密码 |
 | `MYSQL_ROOT_PASSWORD` | 读取 `.env` 中 `MYSQL_PASSWORD` | 容器 MySQL root 密码（`USE_DOCKER_MYSQL=true` 时） |
 | `MYSQL_DB` | 读取 `.env` 中 `MYSQL_DB` | 数据库名 |
+| `DASHSCOPE_API_KEY` | 空 | DashScope ASR Key（启用语音识别必填） |
+| `DASHSCOPE_BASE_URL` | `https://dashscope.aliyuncs.com/api/v1` | DashScope 接口地址 |
+| `DASHSCOPE_ASR_MODEL` | `qwen3-asr-flash` | ASR 模型名 |
+| `REMINDER_ENABLE_SCHEDULER` | `true` | 是否启用内置提醒定时任务 |
+| `REMINDER_TIME` | `20:00` | 每日提醒扫描时间（HH:MM） |
+| `REMINDER_TIMEZONE` | `Asia/Shanghai` | 提醒时区 |
 
 说明：
 
@@ -130,6 +136,7 @@ docker compose logs -f frontend
 - 前端 HTTP：`http://localhost:8655`
 - 前端 HTTPS：`https://localhost:8656`
 - 后端健康检查（经前端反代）：`http://localhost:8655/api/v1/health`
+- 明日提醒接口：`http://localhost:8655/api/v1/reminders/tomorrow?user_id=user_001`
 
 ## 6. 清理命令（`cleanup.sh`）
 

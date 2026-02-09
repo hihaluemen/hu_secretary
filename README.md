@@ -96,7 +96,29 @@ MYSQL_DB=daily_assistant
 MYSQL_CHARSET=utf8mb4
 ```
 
-## 3.4 Demo 开关
+## 3.4 ASR（语音识别）
+
+```env
+ASR_PROVIDER=dashscope
+ASR_TIMEOUT_SECONDS=60
+ASR_MAX_FILE_SIZE_MB=10
+DASHSCOPE_API_KEY=你的_key
+DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/api/v1
+DASHSCOPE_ASR_MODEL=qwen3-asr-flash
+```
+
+## 3.5 明日提醒
+
+```env
+REMINDER_ENABLE_SCHEDULER=true
+REMINDER_TIME=20:00
+REMINDER_TIMEZONE=Asia/Shanghai
+REMINDER_SCAN_DAYS_AHEAD=1
+```
+
+说明：开启后端后，会在每天 `REMINDER_TIME` 扫描“明天事项”（实时计算，不落库）。
+
+## 3.6 Demo 开关
 
 ```env
 DEMO_ENABLE_RESET=true
@@ -184,6 +206,7 @@ VITE_API_TIMEOUT_MS=120000
 ## 8. 后端 API 概览
 
 - `GET /api/v1/health`
+- `POST /api/v1/asr/transcribe`
 - `POST /api/v1/assistant/process`
 - `GET /api/v1/events`
 - `GET /api/v1/events/{event_id}`
@@ -191,6 +214,7 @@ VITE_API_TIMEOUT_MS=120000
 - `PUT /api/v1/events/{event_id}`
 - `DELETE /api/v1/events/{event_id}`
 - `POST /api/v1/events/reset-demo`
+- `GET /api/v1/reminders/tomorrow`
 
 ---
 

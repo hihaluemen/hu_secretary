@@ -10,6 +10,11 @@
         <p>{{ result.normalized_input || '-' }}</p>
       </article>
 
+      <article v-if="asrText" class="block">
+        <h3>ASR 转写文本</h3>
+        <p>{{ asrText }}</p>
+      </article>
+
       <article class="block">
         <h3>意图拆分</h3>
         <ul>
@@ -36,6 +41,10 @@ defineProps({
   result: {
     type: Object,
     default: null,
+  },
+  asrText: {
+    type: String,
+    default: '',
   },
 })
 </script>
@@ -100,4 +109,3 @@ h2 {
   gap: 6px;
 }
 </style>
-

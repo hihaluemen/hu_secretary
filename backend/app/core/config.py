@@ -1,4 +1,5 @@
 from functools import lru_cache
+from zoneinfo import ZoneInfo
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,6 +28,18 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OPENAI_MODEL: str = "gpt-4o-mini"
+
+    ASR_PROVIDER: str = "dashscope"
+    ASR_TIMEOUT_SECONDS: int = 60
+    ASR_MAX_FILE_SIZE_MB: int = 10
+    DASHSCOPE_API_KEY: str = ""
+    DASHSCOPE_BASE_URL: str = "https://dashscope.aliyuncs.com/api/v1"
+    DASHSCOPE_ASR_MODEL: str = "qwen3-asr-flash"
+
+    REMINDER_ENABLE_SCHEDULER: bool = True
+    REMINDER_TIME: str = "20:00"
+    REMINDER_TIMEZONE: str = "Asia/Shanghai"
+    REMINDER_SCAN_DAYS_AHEAD: int = 1
 
     MYSQL_HOST: str = "localhost"
     MYSQL_PORT: int = 3306
@@ -65,8 +78,14 @@ class Settings(BaseSettings):
             return self.OPENAI_MODEL
         return self.KIMI_MODEL
 
+    @property
+    def reminder_timezone(self) -> ZoneInfo:
+        try:
+            return ZoneInfo(self.REMINDER_TIMEZONE)
+        except Exception:
+            return ZoneInfo("Asia/Shanghai")
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

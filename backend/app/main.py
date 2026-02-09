@@ -9,12 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 
 from app.api.v1.assistant import router as assistant_router
+from app.api.v1.asr import router as asr_router
 from app.api.v1.events import router as events_router
 from app.api.v1.health import router as health_router
+from app.api.v1.reminders import router as reminders_router
 from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.core.logging import setup_logging
 from app.schemas.common import ErrorResponse
+from app.services.reminder_scheduler import ReminderSchedulerRunner
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -33,7 +36,21 @@ app.add_middleware(
 
 app.include_router(health_router, prefix=settings.API_PREFIX)
 app.include_router(assistant_router, prefix=settings.API_PREFIX)
+app.include_router(asr_router, prefix=settings.API_PREFIX)
 app.include_router(events_router, prefix=settings.API_PREFIX)
+app.include_router(reminders_router, prefix=settings.API_PREFIX)
+
+reminder_scheduler_runner = ReminderSchedulerRunner()
+
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    await reminder_scheduler_runner.start()
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    await reminder_scheduler_runner.stop()
 
 
 @app.middleware("http")

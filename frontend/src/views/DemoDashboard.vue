@@ -12,20 +12,24 @@
     <section class="layout">
       <div class="left-col">
         <InputPanel
+          ref="inputPanelRef"
           v-model:input-text="store.inputText"
           v-model:dry-run="store.dryRun"
           :loading="store.loading"
           @submit="store.runProcess"
-          @reset-demo="store.resetDemoData"
+          @reset-demo="onResetDemo"
           @replay-last="store.replayLast"
           @export-json="store.exportCurrentResult"
           @use-sample="store.setSample"
+          @audio-ready="store.setAudioPayload"
+          @audio-cleared="onAudioCleared"
         />
-        <PipelineResult :loading="store.loading" :result="store.processResult" />
+        <PipelineResult :loading="store.loading" :result="store.processResult" :asr-text="store.asrText" />
         <RunLogPanel :logs="store.runLogs" />
       </div>
 
       <div class="right-col">
+        <TomorrowReminderPanel :loading="store.remindersLoading" :items="store.tomorrowReminders" />
         <EventTable :loading="store.eventsLoading" :events="store.events" />
         <UpdateSqlPreview :loading="store.loading" :sql="store.updateSqlPreview" />
       </div>
@@ -35,19 +39,32 @@
 
 <script setup>
 import { onMounted } from 'vue'
+import { ref } from 'vue'
 
 import EventTable from '../components/EventTable.vue'
 import InputPanel from '../components/InputPanel.vue'
 import PipelineResult from '../components/PipelineResult.vue'
 import RunLogPanel from '../components/RunLogPanel.vue'
+import TomorrowReminderPanel from '../components/TomorrowReminderPanel.vue'
 import UpdateSqlPreview from '../components/UpdateSqlPreview.vue'
 import { useDemoStore } from '../stores/demo'
 
 const store = useDemoStore()
+const inputPanelRef = ref(null)
 
 onMounted(async () => {
   await store.loadEvents()
+  await store.loadTomorrowReminders()
 })
+
+const onAudioCleared = () => {
+  store.clearAudioPayload()
+}
+
+const onResetDemo = async () => {
+  await store.resetDemoData()
+  inputPanelRef.value?.clearAudio?.()
+}
 </script>
 
 <style scoped>

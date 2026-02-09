@@ -25,6 +25,20 @@
       <button type="button" class="sample" @click="$emit('use-sample', 'update')">更新</button>
     </div>
 
+    <div class="record-row">
+      <span>语音输入：</span>
+      <span v-if="!canRecord" class="record-hint">当前浏览器不支持录音</span>
+      <button type="button" class="sample" :disabled="loading || !canRecord" @click="toggleRecord">
+        {{ isRecording ? '停止录音' : '开始录音' }}
+      </button>
+      <button type="button" class="ghost" :disabled="loading || !audioUrl" @click="clearAudio">清除录音</button>
+      <span class="record-hint">{{ recordHint }}</span>
+    </div>
+
+    <div v-if="audioUrl" class="audio-preview">
+      <audio :src="audioUrl" controls preload="none" />
+    </div>
+
     <div class="submit-row">
       <label class="checkbox">
         <input
@@ -42,6 +56,8 @@
 </template>
 
 <script setup>
+import { computed, onBeforeUnmount, ref } from 'vue'
+
 defineProps({
   inputText: {
     type: String,
@@ -65,10 +81,93 @@ const emit = defineEmits([
   'use-sample',
   'update:inputText',
   'update:dryRun',
+  'audio-ready',
+  'audio-cleared',
 ])
 
 const onReset = () => emit('reset-demo')
 const onReplay = () => emit('replay-last')
+
+const isRecording = ref(false)
+const mediaRecorder = ref(null)
+const audioChunks = ref([])
+const audioUrl = ref('')
+const recordHint = computed(() => {
+  if (isRecording.value) {
+    return '录音中...'
+  }
+  if (audioUrl.value) {
+    return '录音完成，可试听'
+  }
+  return '点击开始录音'
+})
+const canRecord =
+  typeof navigator !== 'undefined' &&
+  !!navigator.mediaDevices?.getUserMedia &&
+  typeof MediaRecorder !== 'undefined'
+
+const toggleRecord = async () => {
+  if (!canRecord) {
+    emit('audio-cleared')
+    return
+  }
+  if (isRecording.value) {
+    mediaRecorder.value?.stop()
+    return
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const recorder = new MediaRecorder(stream)
+    audioChunks.value = []
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        audioChunks.value.push(event.data)
+      }
+    }
+    recorder.onstop = () => {
+      const mimeType = recorder.mimeType || 'audio/webm'
+      const blob = new Blob(audioChunks.value, { type: mimeType })
+      if (audioUrl.value) {
+        URL.revokeObjectURL(audioUrl.value)
+      }
+      audioUrl.value = URL.createObjectURL(blob)
+      emit('audio-ready', {
+        blob,
+        mimeType,
+      })
+      stream.getTracks().forEach((track) => track.stop())
+      isRecording.value = false
+    }
+    mediaRecorder.value = recorder
+    recorder.start()
+    isRecording.value = true
+  } catch {
+    emit('audio-cleared')
+  }
+}
+
+const clearAudio = () => {
+  if (audioUrl.value) {
+    URL.revokeObjectURL(audioUrl.value)
+  }
+  audioUrl.value = ''
+  audioChunks.value = []
+  emit('audio-cleared')
+}
+
+onBeforeUnmount(() => {
+  if (audioUrl.value) {
+    URL.revokeObjectURL(audioUrl.value)
+  }
+  if (isRecording.value) {
+    mediaRecorder.value?.stop()
+  }
+})
+
+defineExpose({
+  clearAudio,
+})
 </script>
 
 <style scoped>
@@ -140,6 +239,27 @@ textarea:focus {
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.record-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.record-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.audio-preview {
+  margin-top: 10px;
+}
+
+.audio-preview audio {
+  width: 100%;
 }
 
 .sample,

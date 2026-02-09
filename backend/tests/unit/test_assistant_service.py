@@ -57,3 +57,7 @@ def test_extract_events_returns_empty_list_on_invalid_json_response():
     result = service.extract_events("明天下午跟张总开会")
     assert result == []
 
+
+def test_placeholder_to_keep_existing_assistant_tests_stable():
+    service = _build_service()
+    assert isinstance(service, AssistantService)

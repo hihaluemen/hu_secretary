@@ -8,6 +8,28 @@ vi.mock('../src/api/events', () => ({
   resetDemoEvents: vi.fn(async () => ({ user_id: 'user_001', deleted_count: 0 })),
 }))
 
+vi.mock('../src/api/reminders', () => ({
+  fetchTomorrowReminders: vi.fn(async () => ({
+    user_id: 'user_001',
+    remind_date: '2026-02-09',
+    target_date: '2026-02-10',
+    total: 0,
+    items: [],
+  })),
+}))
+
+vi.mock('../src/api/asr', () => ({
+  transcribeAudio: vi.fn(async () => ({
+    user_id: 'user_001',
+    text: '明天上午开会',
+    provider: 'dashscope',
+    model: 'qwen3-asr-flash',
+    mime_type: 'audio/webm',
+    file_size: 123,
+    duration_ms: 80,
+  })),
+}))
+
 vi.mock('../src/api/assistant', () => ({
   processAssistant: vi.fn(async () => ({
     user_id: 'user_001',
