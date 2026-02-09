@@ -26,35 +26,47 @@ fi
 
 export DOCKER_REGISTRY="${DOCKER_REGISTRY:-}"
 export USE_CN_MIRROR="${USE_CN_MIRROR:-false}"
+export USE_DOCKER_MYSQL="${USE_DOCKER_MYSQL:-false}"
 export HTTP_PORT="${HTTP_PORT:-8655}"
 export HTTPS_PORT="${HTTPS_PORT:-8656}"
 export MYSQL_PORT="${MYSQL_PORT:-3306}"
+export MYSQL_HOST="${MYSQL_HOST:-host.docker.internal}"
+export MYSQL_USER="${MYSQL_USER:-root}"
+
+mysql_password_from_env="$(awk -F= '/^MYSQL_PASSWORD=/{sub(/^MYSQL_PASSWORD=/,""); print $0}' .env | tail -n 1)"
+mysql_db_from_env="$(awk -F= '/^MYSQL_DB=/{sub(/^MYSQL_DB=/,""); print $0}' .env | tail -n 1)"
+
+export MYSQL_PASSWORD="${MYSQL_PASSWORD:-$mysql_password_from_env}"
+export MYSQL_DB="${MYSQL_DB:-${mysql_db_from_env:-daily_assistant}}"
 
 if [ -n "$DOCKER_REGISTRY" ] && [ "${DOCKER_REGISTRY%/}" = "$DOCKER_REGISTRY" ]; then
   export DOCKER_REGISTRY="${DOCKER_REGISTRY}/"
 fi
 
-if [ -z "${MYSQL_ROOT_PASSWORD:-}" ]; then
-  mysql_password_from_env="$(awk -F= '/^MYSQL_PASSWORD=/{sub(/^MYSQL_PASSWORD=/,""); print $0}' .env | tail -n 1)"
-  export MYSQL_ROOT_PASSWORD="${mysql_password_from_env}"
-fi
+if [ "$USE_DOCKER_MYSQL" = "true" ]; then
+  export MYSQL_HOST="mysql"
+  export MYSQL_PORT="3306"
+  export MYSQL_USER="root"
+  export MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-${MYSQL_PASSWORD:-$mysql_password_from_env}}"
+  export MYSQL_PASSWORD="${MYSQL_ROOT_PASSWORD}"
 
-if [ -z "${MYSQL_DB:-}" ]; then
-  mysql_db_from_env="$(awk -F= '/^MYSQL_DB=/{sub(/^MYSQL_DB=/,""); print $0}' .env | tail -n 1)"
-  export MYSQL_DB="${mysql_db_from_env:-daily_assistant}"
-fi
-
-if [ -z "${MYSQL_ROOT_PASSWORD:-}" ]; then
-  echo "[deploy] 未检测到 MYSQL_ROOT_PASSWORD（将尝试读取 .env 里的 MYSQL_PASSWORD 失败）。"
-  echo "[deploy] 请设置 MYSQL_ROOT_PASSWORD 或在 .env 中配置 MYSQL_PASSWORD。"
-  exit 1
+  if [ -z "${MYSQL_ROOT_PASSWORD:-}" ]; then
+    echo "[deploy] USE_DOCKER_MYSQL=true 时，需要设置 MYSQL_ROOT_PASSWORD（或 .env 里 MYSQL_PASSWORD）。"
+    exit 1
+  fi
+else
+  if [ -z "${MYSQL_PASSWORD:-}" ]; then
+    echo "[deploy] USE_DOCKER_MYSQL=false 时，需要设置外部数据库密码 MYSQL_PASSWORD（或 .env 里 MYSQL_PASSWORD）。"
+    exit 1
+  fi
 fi
 
 echo "[deploy] 参数："
 echo "  DOCKER_REGISTRY=${DOCKER_REGISTRY:-<官方源>}"
 echo "  USE_CN_MIRROR=${USE_CN_MIRROR}"
-echo "  HTTP_PORT=${HTTP_PORT} HTTPS_PORT=${HTTPS_PORT} MYSQL_PORT=${MYSQL_PORT}"
-echo "  MYSQL_DB=${MYSQL_DB}"
+echo "  USE_DOCKER_MYSQL=${USE_DOCKER_MYSQL}"
+echo "  HTTP_PORT=${HTTP_PORT} HTTPS_PORT=${HTTPS_PORT}"
+echo "  MYSQL_HOST=${MYSQL_HOST} MYSQL_PORT=${MYSQL_PORT} MYSQL_DB=${MYSQL_DB} MYSQL_USER=${MYSQL_USER}"
 
 if [ "${DOCKER_LOGIN:-false}" = "true" ]; then
   if [ -z "${DOCKER_LOGIN_REGISTRY:-}" ] || [ -z "${DOCKER_LOGIN_USERNAME:-}" ] || [ -z "${DOCKER_LOGIN_PASSWORD:-}" ]; then
@@ -66,7 +78,11 @@ if [ "${DOCKER_LOGIN:-false}" = "true" ]; then
 fi
 
 echo "[deploy] 开始构建并启动..."
-docker compose up -d --build
+if [ "$USE_DOCKER_MYSQL" = "true" ]; then
+  docker compose --profile with-mysql up -d --build
+else
+  docker compose up -d --build backend frontend
+fi
 
 echo "[deploy] 启动完成："
 echo "  前端 HTTP:  http://localhost:${HTTP_PORT}"

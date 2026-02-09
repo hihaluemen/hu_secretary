@@ -232,6 +232,8 @@ Docker 专项文档请看：`docs/docker-deploy.md`
 - `cleanup.sh`（停止 + 清理）
 - `logs.sh`（查看日志）
 
+默认模式为**外置 MySQL**（不启动容器 MySQL，避免占用/冲突本机数据库）。
+
 ### 10.1 快速启动
 
 先准备环境变量（至少保证根目录 `.env` 存在并填好 LLM 密钥）：
@@ -251,6 +253,7 @@ MYSQL_ROOT_PASSWORD='你的root密码'
 ```bash
 DOCKER_REGISTRY=docker.1ms.run/ \
 USE_CN_MIRROR=true \
+USE_DOCKER_MYSQL=false \
 HTTP_PORT=8655 \
 HTTPS_PORT=8656 \
 ./deploy.sh
@@ -269,6 +272,21 @@ HTTPS_PORT=8656 \
   - 前端 `npm` 使用 `npmmirror`
   - 前端运行镜像（alpine）使用阿里云 apk 镜像
 - `USE_CN_MIRROR=false`（默认）时，使用官方源。
+
+### 10.2.1 MySQL 模式开关（新增）
+
+- `USE_DOCKER_MYSQL=false`（默认）：
+  - 使用外置 MySQL（读 `.env` 里的 `MYSQL_HOST/PORT/USER/PASSWORD`）
+  - 不启动容器 `mysql`，避免和本机数据库冲突
+- `USE_DOCKER_MYSQL=true`：
+  - 启动容器 `mysql`
+  - 后端自动连接容器内 `mysql:3306`
+
+启用容器 MySQL 示例：
+
+```bash
+USE_DOCKER_MYSQL=true MYSQL_ROOT_PASSWORD='你的root密码' ./deploy.sh
+```
 
 ### 10.3 镜像前缀/镜像站
 

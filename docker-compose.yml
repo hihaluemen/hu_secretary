@@ -2,6 +2,7 @@ name: mishu-demo
 
 services:
   mysql:
+    profiles: ["with-mysql"]
     image: ${DOCKER_REGISTRY:-}mysql:8.0
     container_name: mishu-mysql
     restart: unless-stopped
@@ -9,8 +10,6 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-}
       MYSQL_DATABASE: ${MYSQL_DB}
       TZ: Asia/Shanghai
-    ports:
-      - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -29,22 +28,21 @@ services:
     image: mishu-backend:local
     container_name: mishu-backend
     restart: unless-stopped
-    depends_on:
-      mysql:
-        condition: service_healthy
     env_file:
       - ./.env
     environment:
       APP_HOST: 0.0.0.0
       APP_PORT: 8000
-      MYSQL_HOST: mysql
-      MYSQL_PORT: 3306
-      MYSQL_USER: root
-      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DB: ${MYSQL_DB}
+      MYSQL_HOST: ${MYSQL_HOST:-host.docker.internal}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_USER: ${MYSQL_USER:-root}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+      MYSQL_DB: ${MYSQL_DB:-daily_assistant}
       MYSQL_CHARSET: ${MYSQL_CHARSET:-utf8mb4}
       MYSQL_WAIT_TIMEOUT: 120
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:${HTTP_PORT:-8655},https://localhost:${HTTPS_PORT:-8656}}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     build:

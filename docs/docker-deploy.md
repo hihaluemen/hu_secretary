@@ -4,7 +4,7 @@
 
 ## 1. 相关文件
 
-- `docker-compose.yml`：编排 `mysql` / `backend` / `frontend`
+- `docker-compose.yml`：编排 `mysql`（可选）/ `backend` / `frontend`
 - `deploy.sh`：构建并启动
 - `cleanup.sh`：停止并清理
 - `logs.sh`：查看容器日志
@@ -29,11 +29,15 @@ cp .env.example .env
 | --- | --- | --- |
 | `DOCKER_REGISTRY` | 空 | 镜像前缀，例如 `docker.1ms.run/` |
 | `USE_CN_MIRROR` | `false` | 是否启用国内加速（pip/npm/apk） |
+| `USE_DOCKER_MYSQL` | `false` | 是否启用容器内 MySQL（默认使用外置 MySQL） |
 | `HTTP_PORT` | `8655` | 前端 HTTP 端口 |
 | `HTTPS_PORT` | `8656` | 前端 HTTPS 端口 |
-| `MYSQL_PORT` | `3306` | MySQL 映射端口 |
-| `MYSQL_ROOT_PASSWORD` | 读取 `.env` 中 `MYSQL_PASSWORD` | 容器内 MySQL root 密码 |
-| `MYSQL_DB` | 读取 `.env` 中 `MYSQL_DB` | 初始化数据库名 |
+| `MYSQL_PORT` | `3306` | MySQL 连接端口 |
+| `MYSQL_HOST` | `host.docker.internal` | 外置 MySQL 地址（`USE_DOCKER_MYSQL=false` 时生效） |
+| `MYSQL_USER` | `root` | MySQL 用户名 |
+| `MYSQL_PASSWORD` | 读取 `.env` 中 `MYSQL_PASSWORD` | MySQL 密码 |
+| `MYSQL_ROOT_PASSWORD` | 读取 `.env` 中 `MYSQL_PASSWORD` | 容器 MySQL root 密码（`USE_DOCKER_MYSQL=true` 时） |
+| `MYSQL_DB` | 读取 `.env` 中 `MYSQL_DB` | 数据库名 |
 
 说明：
 
@@ -56,15 +60,38 @@ cp .env.example .env
 
 ### 4.1 你给出的启动方式（推荐）
 
+默认推荐：使用外置 MySQL（不会启动容器 MySQL，也不会占用本机 3306）
+
 ```bash
 DOCKER_REGISTRY=docker.1ms.run/ \
 USE_CN_MIRROR=true \
+USE_DOCKER_MYSQL=false \
 HTTP_PORT=8655 \
 HTTPS_PORT=8656 \
 ./deploy.sh
 ```
 
-### 4.2 先手动 `docker login` 再启动
+如果你的外置 MySQL 不在宿主机，可显式指定：
+
+```bash
+MYSQL_HOST=192.168.1.100 MYSQL_PORT=3306 MYSQL_USER=root MYSQL_PASSWORD='你的密码' ./deploy.sh
+```
+
+### 4.2 启用容器 MySQL（可选）
+
+```bash
+USE_DOCKER_MYSQL=true \
+MYSQL_ROOT_PASSWORD='你的root密码' \
+MYSQL_DB=daily_assistant \
+./deploy.sh
+```
+
+说明：
+
+- 该模式会启动 `mysql` 服务（compose profile: `with-mysql`）。
+- 容器 MySQL 不映射宿主机端口，不会与本机 3306 冲突。
+
+### 4.3 先手动 `docker login` 再启动
 
 ```bash
 docker login docker.1ms.run -u 1ms -p '你的密码'
@@ -78,7 +105,7 @@ DOCKER_REGISTRY=docker.1ms.run/ USE_CN_MIRROR=true ./deploy.sh
 echo '你的密码' | docker login docker.1ms.run -u 1ms --password-stdin
 ```
 
-### 4.3 由脚本自动登录后启动
+### 4.4 由脚本自动登录后启动
 
 ```bash
 DOCKER_LOGIN=true \
@@ -145,7 +172,7 @@ REMOVE_IMAGES=true REMOVE_VOLUMES=true ./cleanup.sh
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `SERVICE` | `all` | 服务名：`all` / `backend` / `frontend` / `mysql` |
+| `SERVICE` | `all` | 服务名：`all` / `backend` / `frontend` / `mysql`（仅在启用容器 MySQL 时有） |
 | `FOLLOW` | `true` | 是否持续跟随日志 |
 | `TAIL` | `200` | 默认展示最近多少行 |
 | `SINCE` | 空 | 仅看某时间窗口，如 `10m` / `1h` |
