@@ -1,0 +1,68 @@
+name: mishu-demo
+
+services:
+  mysql:
+    image: ${DOCKER_REGISTRY:-}mysql:8.0
+    container_name: mishu-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-}
+      MYSQL_DATABASE: ${MYSQL_DB}
+      TZ: Asia/Shanghai
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-}
+        USE_CN_MIRROR: ${USE_CN_MIRROR:-false}
+    image: mishu-backend:local
+    container_name: mishu-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - ./.env
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DB: ${MYSQL_DB}
+      MYSQL_CHARSET: ${MYSQL_CHARSET:-utf8mb4}
+      MYSQL_WAIT_TIMEOUT: 120
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:${HTTP_PORT:-8655},https://localhost:${HTTPS_PORT:-8656}}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-}
+        USE_CN_MIRROR: ${USE_CN_MIRROR:-false}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+        VITE_API_TIMEOUT_MS: ${VITE_API_TIMEOUT_MS:-120000}
+    image: mishu-frontend:local
+    container_name: mishu-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${HTTP_PORT:-8655}:80"
+      - "${HTTPS_PORT:-8656}:443"
+
+volumes:
+  mysql-data:

@@ -221,6 +221,128 @@ cd frontend
 
 ---
 
+## 10. Docker 一键部署（新增）
+
+Docker 专项文档请看：`docs/docker-deploy.md`
+
+已提供：
+
+- `docker-compose.yml`
+- `deploy.sh`（构建 + 启动）
+- `cleanup.sh`（停止 + 清理）
+- `logs.sh`（查看日志）
+
+### 10.1 快速启动
+
+先准备环境变量（至少保证根目录 `.env` 存在并填好 LLM 密钥）：
+
+```bash
+cp .env.example .env
+```
+
+可选：若你希望容器内 MySQL root 密码和当前 `.env` 解耦，可额外在命令行传：
+
+```bash
+MYSQL_ROOT_PASSWORD='你的root密码'
+```
+
+然后一键部署（与你给的示例一致）：
+
+```bash
+DOCKER_REGISTRY=docker.1ms.run/ \
+USE_CN_MIRROR=true \
+HTTP_PORT=8655 \
+HTTPS_PORT=8656 \
+./deploy.sh
+```
+
+启动后访问：
+
+- 前端 HTTP：`http://localhost:8655`
+- 前端 HTTPS：`https://localhost:8656`（自签名证书）
+- 后端健康检查（经前端反代）：`http://localhost:8655/api/v1/health`
+
+### 10.2 国内网络加速开关
+
+- `USE_CN_MIRROR=true` 时：
+  - 后端 `pip` 使用清华源
+  - 前端 `npm` 使用 `npmmirror`
+  - 前端运行镜像（alpine）使用阿里云 apk 镜像
+- `USE_CN_MIRROR=false`（默认）时，使用官方源。
+
+### 10.3 镜像前缀/镜像站
+
+- `DOCKER_REGISTRY` 用于给基础镜像统一加前缀。
+- 建议带结尾斜杠，例如：`docker.1ms.run/`。
+- 若你没带斜杠，`deploy.sh` 会自动补上。
+
+### 10.4 docker login（可选）
+
+你可先手工登录：
+
+```bash
+docker login docker.1ms.run -u 1ms -p '你的密码'
+```
+
+> 安全提示：`-p` 会出现在 shell 历史里，生产环境更推荐 `docker login ... --password-stdin`。
+
+也可以让 `deploy.sh` 自动登录：
+
+```bash
+DOCKER_LOGIN=true \
+DOCKER_LOGIN_REGISTRY=docker.1ms.run \
+DOCKER_LOGIN_USERNAME=1ms \
+DOCKER_LOGIN_PASSWORD='你的密码' \
+DOCKER_REGISTRY=docker.1ms.run/ \
+USE_CN_MIRROR=true \
+./deploy.sh
+```
+
+### 10.5 清理脚本
+
+仅停止并删除容器/网络：
+
+```bash
+./cleanup.sh
+```
+
+同时删除数据卷（MySQL 数据会清空）：
+
+```bash
+REMOVE_VOLUMES=true ./cleanup.sh
+```
+
+同时删除本项目构建的镜像：
+
+```bash
+REMOVE_IMAGES=true ./cleanup.sh
+```
+
+二者都清理：
+
+```bash
+REMOVE_IMAGES=true REMOVE_VOLUMES=true ./cleanup.sh
+```
+
+### 10.6 日志脚本
+
+查看全部服务日志（默认持续跟随，最近 200 行）：
+
+```bash
+./logs.sh
+```
+
+常用示例：
+
+```bash
+SERVICE=backend ./logs.sh
+SERVICE=frontend FOLLOW=false ./logs.sh
+SERVICE=mysql TAIL=500 ./logs.sh
+SERVICE=backend SINCE=10m ./logs.sh
+```
+
+---
+
 ## 10. 常见问题
 
 ## Q1: `vitest: command not found`
