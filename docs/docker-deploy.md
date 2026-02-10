@@ -38,6 +38,15 @@ cp .env.example .env
 | `MYSQL_PASSWORD` | 读取 `.env` 中 `MYSQL_PASSWORD` | MySQL 密码 |
 | `MYSQL_ROOT_PASSWORD` | 读取 `.env` 中 `MYSQL_PASSWORD` | 容器 MySQL root 密码（`USE_DOCKER_MYSQL=true` 时） |
 | `MYSQL_DB` | 读取 `.env` 中 `MYSQL_DB` | 数据库名 |
+| `BACKEND_HTTP_PROXY` | 空 | 后端 HTTP 代理地址（按需） |
+| `BACKEND_HTTPS_PROXY` | 空 | 后端 HTTPS 代理地址（按需） |
+| `BACKEND_NO_PROXY` | `localhost,127.0.0.1,backend,mysql,host.docker.internal` | 后端不走代理地址列表 |
+| `FRONTEND_HTTP_PROXY` | 空 | 前端构建 HTTP 代理（默认不需要） |
+| `FRONTEND_HTTPS_PROXY` | 空 | 前端构建 HTTPS 代理（默认不需要） |
+| `FRONTEND_NO_PROXY` | `localhost,127.0.0.1,backend,mysql,host.docker.internal` | 前端不走代理地址列表 |
+| `HTTP_PROXY` | 空 | 兼容变量，后端会回退读取 |
+| `HTTPS_PROXY` | 空 | 兼容变量，后端会回退读取 |
+| `NO_PROXY` | `localhost,127.0.0.1,backend,mysql,host.docker.internal` | 兼容变量，后端会回退读取 |
 | `DASHSCOPE_API_KEY` | 空 | DashScope ASR Key（启用语音识别必填） |
 | `DASHSCOPE_BASE_URL` | `https://dashscope.aliyuncs.com/api/v1` | DashScope 接口地址 |
 | `DASHSCOPE_ASR_MODEL` | `qwen3-asr-flash` | ASR 模型名 |
@@ -52,6 +61,9 @@ cp .env.example .env
   - 后端 `pip` 走清华源
   - 前端 `npm` 走 `npmmirror`
   - 前端运行镜像 `apk` 走阿里云镜像
+- 默认建议只给后端设置代理（LLM/ASR 外网调用主要在后端发生）。
+- 前端默认不使用代理；仅在前端镜像构建网络受限时，再设置 `FRONTEND_HTTP_PROXY/FRONTEND_HTTPS_PROXY`。
+- 为兼容旧配置，后端若未设置 `BACKEND_*`，会回退读取 `HTTP_PROXY/HTTPS_PROXY/NO_PROXY`。
 
 ### 3.2 登录镜像站参数（可选）
 
@@ -96,6 +108,26 @@ MYSQL_DB=daily_assistant \
 
 - 该模式会启动 `mysql` 服务（compose profile: `with-mysql`）。
 - 容器 MySQL 不映射宿主机端口，不会与本机 3306 冲突。
+
+### 4.2.1 代理配置（可选）
+
+当容器访问外网（如 LLM / ASR API）需要走宿主机代理时，可在启动前传入：
+
+```bash
+BACKEND_HTTP_PROXY=http://host.docker.internal:7890 \
+BACKEND_HTTPS_PROXY=http://host.docker.internal:7890 \
+BACKEND_NO_PROXY=localhost,127.0.0.1,backend,mysql,host.docker.internal \
+./deploy.sh
+```
+
+如果前端构建阶段也需要代理，再额外传入：
+
+```bash
+FRONTEND_HTTP_PROXY=http://host.docker.internal:7890 \
+FRONTEND_HTTPS_PROXY=http://host.docker.internal:7890 \
+FRONTEND_NO_PROXY=localhost,127.0.0.1,backend,mysql,host.docker.internal \
+./deploy.sh
+```
 
 ### 4.3 先手动 `docker login` 再启动
 

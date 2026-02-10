@@ -22,9 +22,14 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY:-}
         USE_CN_MIRROR: ${USE_CN_MIRROR:-false}
+        HTTP_PROXY: ${BACKEND_HTTP_PROXY:-${HTTP_PROXY:-}}
+        HTTPS_PROXY: ${BACKEND_HTTPS_PROXY:-${HTTPS_PROXY:-}}
+        NO_PROXY: ${BACKEND_NO_PROXY:-${NO_PROXY:-localhost,127.0.0.1,backend,mysql,host.docker.internal}}
     image: mishu-backend:local
     container_name: mishu-backend
     restart: unless-stopped
@@ -41,6 +46,9 @@ services:
       MYSQL_CHARSET: ${MYSQL_CHARSET:-utf8mb4}
       MYSQL_WAIT_TIMEOUT: 120
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:${HTTP_PORT:-8655},https://localhost:${HTTPS_PORT:-8656}}
+      HTTP_PROXY: ${BACKEND_HTTP_PROXY:-${HTTP_PROXY:-}}
+      HTTPS_PROXY: ${BACKEND_HTTPS_PROXY:-${HTTPS_PROXY:-}}
+      NO_PROXY: ${BACKEND_NO_PROXY:-${NO_PROXY:-localhost,127.0.0.1,backend,mysql,host.docker.internal}}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -48,11 +56,16 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY:-}
         USE_CN_MIRROR: ${USE_CN_MIRROR:-false}
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
         VITE_API_TIMEOUT_MS: ${VITE_API_TIMEOUT_MS:-120000}
+        HTTP_PROXY: ${FRONTEND_HTTP_PROXY:-}
+        HTTPS_PROXY: ${FRONTEND_HTTPS_PROXY:-}
+        NO_PROXY: ${FRONTEND_NO_PROXY:-localhost,127.0.0.1,backend,mysql,host.docker.internal}
     image: mishu-frontend:local
     container_name: mishu-frontend
     restart: unless-stopped

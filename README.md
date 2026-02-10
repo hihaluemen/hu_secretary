@@ -312,6 +312,28 @@ HTTPS_PORT=8656 \
 USE_DOCKER_MYSQL=true MYSQL_ROOT_PASSWORD='你的root密码' ./deploy.sh
 ```
 
+### 10.2.2 代理配置（可选）
+
+- 默认建议只给后端设置代理（LLM/ASR 的外网调用主要发生在后端）：
+
+```bash
+BACKEND_HTTP_PROXY=http://host.docker.internal:7890 \
+BACKEND_HTTPS_PROXY=http://host.docker.internal:7890 \
+BACKEND_NO_PROXY=localhost,127.0.0.1,backend,mysql,host.docker.internal \
+./deploy.sh
+```
+
+- 前端默认不走代理；仅当“前端镜像构建网络受限”时，再额外设置：
+
+```bash
+FRONTEND_HTTP_PROXY=http://host.docker.internal:7890 \
+FRONTEND_HTTPS_PROXY=http://host.docker.internal:7890 \
+FRONTEND_NO_PROXY=localhost,127.0.0.1,backend,mysql,host.docker.internal \
+./deploy.sh
+```
+
+- 为兼容旧配置，后端若未设置 `BACKEND_*`，会回退读取 `HTTP_PROXY/HTTPS_PROXY/NO_PROXY`。
+
 ### 10.3 镜像前缀/镜像站
 
 - `DOCKER_REGISTRY` 用于给基础镜像统一加前缀。
