@@ -3,7 +3,16 @@ from fastapi import APIRouter, Query
 from app.core.config import get_settings
 from app.core.exceptions import BadRequestError
 from app.repositories.event_repository import EventRepository
-from app.schemas.event import EventCreateRequest, EventItem, EventResetResponse, EventUpdateRequest
+from app.schemas.event import (
+    EventBatchCreateRequest,
+    EventBatchCreateResponse,
+    EventCreateRequest,
+    EventExecuteUpdateSQLRequest,
+    EventExecuteUpdateSQLResponse,
+    EventItem,
+    EventResetResponse,
+    EventUpdateRequest,
+)
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -34,6 +43,13 @@ def create_event(req: EventCreateRequest) -> EventItem:
     return EventItem(**row)
 
 
+@router.post("/batch-create", response_model=EventBatchCreateResponse)
+def batch_create_events(req: EventBatchCreateRequest) -> EventBatchCreateResponse:
+    repo = EventRepository()
+    result = repo.insert_events(user_id=req.user_id, events=req.events)
+    return EventBatchCreateResponse(**result)
+
+
 @router.put("/{event_id}", response_model=EventItem)
 def update_event(event_id: int, req: EventUpdateRequest) -> EventItem:
     repo = EventRepository()
@@ -56,3 +72,14 @@ def reset_demo(user_id: str = Query(default="user_001")) -> EventResetResponse:
     repo = EventRepository()
     deleted = repo.clear_events(user_id=user_id)
     return EventResetResponse(user_id=user_id, deleted_count=deleted)
+
+
+@router.post("/execute-update-sql", response_model=EventExecuteUpdateSQLResponse)
+def execute_update_sql(req: EventExecuteUpdateSQLRequest) -> EventExecuteUpdateSQLResponse:
+    settings = get_settings()
+    if not settings.DEMO_ENABLE_UPDATE_EXECUTE:
+        raise BadRequestError(message="演示更新执行未开启", code="DEMO_UPDATE_EXECUTE_DISABLED")
+
+    repo = EventRepository()
+    affected_rows = repo.execute_update_sql(user_id=req.user_id, sql=req.sql)
+    return EventExecuteUpdateSQLResponse(user_id=req.user_id, affected_rows=affected_rows)

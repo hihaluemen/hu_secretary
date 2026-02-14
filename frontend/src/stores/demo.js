@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 
 import { processAssistant } from '../api/assistant'
 import { transcribeAudio } from '../api/asr'
-import { fetchEvents, resetDemoEvents } from '../api/events'
+import { createEventsBatch, executeUpdateSql, fetchEvents, resetDemoEvents } from '../api/events'
 import { fetchTomorrowReminders } from '../api/reminders'
 
 const hasObjectUrlApi = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
@@ -32,6 +32,9 @@ export const useDemoStore = defineStore('demo', {
     asrText: '',
     remindersLoading: false,
     tomorrowReminders: [],
+    confirmModalVisible: false,
+    pendingPreviewResult: null,
+    pendingExecutionPlan: null,
   }),
   getters: {
     hasProcessResult: (state) => !!state.processResult,
@@ -79,10 +82,11 @@ export const useDemoStore = defineStore('demo', {
         const payload = {
           user_id: this.userId,
           text: finalInputText,
-          dry_run: this.dryRun,
+          dry_run: true,
         }
         const result = await processAssistant(payload)
         this.processResult = result
+        this.pendingPreviewResult = result
         const elapsed = Math.round(performance.now() - startedAt)
         this.requestHistory.unshift({
           input: finalInputText,
@@ -96,10 +100,36 @@ export const useDemoStore = defineStore('demo', {
           status: 'success',
           message: `处理完成，耗时 ${elapsed}ms`,
         })
+
+        const addEvents = result?.add?.events || []
+        const updateSql = (result?.update_sql || '').trim()
+        const needsConfirm = !this.dryRun && (addEvents.length > 0 || !!updateSql)
+
+        if (needsConfirm) {
+          this.pendingExecutionPlan = {
+            addEvents,
+            updateSql,
+          }
+          this.confirmModalVisible = true
+          this.runLogs.unshift({
+            at: new Date().toISOString(),
+            stage: 'assistant.confirm',
+            status: 'pending',
+            message: '检测到新增或更新操作，请确认后执行',
+          })
+          return
+        }
+
+        this.confirmModalVisible = false
+        this.pendingExecutionPlan = null
+        this.pendingPreviewResult = null
         await this.loadEvents()
         await this.loadTomorrowReminders()
       } catch (error) {
         this.errorMessage = error.message
+        this.confirmModalVisible = false
+        this.pendingExecutionPlan = null
+        this.pendingPreviewResult = null
         if (this.audioBlob && !this.asrText) {
           this.runLogs.unshift({
             at: new Date().toISOString(),
@@ -111,6 +141,91 @@ export const useDemoStore = defineStore('demo', {
         this.runLogs.unshift({
           at: new Date().toISOString(),
           stage: 'assistant.process',
+          status: 'error',
+          message: error.message,
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+    cancelPendingExecution() {
+      this.confirmModalVisible = false
+      this.pendingExecutionPlan = null
+      this.pendingPreviewResult = null
+      this.runLogs.unshift({
+        at: new Date().toISOString(),
+        stage: 'assistant.confirm',
+        status: 'cancel',
+        message: '已取消写库执行',
+      })
+    },
+    async confirmPendingExecution() {
+      if (!this.pendingExecutionPlan) {
+        this.confirmModalVisible = false
+        return
+      }
+
+      this.loading = true
+      this.errorMessage = ''
+      try {
+        const { addEvents, updateSql } = this.pendingExecutionPlan
+        let addResult = this.pendingPreviewResult?.add?.result || null
+        let updateExecuteResult = null
+
+        if (addEvents.length > 0) {
+          addResult = await createEventsBatch({
+            user_id: this.userId,
+            events: addEvents,
+          })
+          this.runLogs.unshift({
+            at: new Date().toISOString(),
+            stage: 'events.batch-create',
+            status: 'success',
+            message: `新增执行完成：成功 ${addResult.success_count || 0} 条`,
+          })
+        }
+
+        if (updateSql) {
+          updateExecuteResult = await executeUpdateSql({
+            user_id: this.userId,
+            sql: updateSql,
+          })
+          this.runLogs.unshift({
+            at: new Date().toISOString(),
+            stage: 'events.execute-update-sql',
+            status: 'success',
+            message: `更新执行完成：影响 ${updateExecuteResult.affected_rows || 0} 条`,
+          })
+        }
+
+        if (this.pendingPreviewResult) {
+          this.processResult = {
+            ...this.pendingPreviewResult,
+            dry_run: false,
+            add: {
+              ...(this.pendingPreviewResult.add || {}),
+              result: addResult,
+            },
+            update_execute: updateExecuteResult,
+          }
+        }
+
+        this.confirmModalVisible = false
+        this.pendingExecutionPlan = null
+        this.pendingPreviewResult = null
+        this.runLogs.unshift({
+          at: new Date().toISOString(),
+          stage: 'assistant.confirm',
+          status: 'success',
+          message: '写库执行成功',
+        })
+        await this.loadEvents()
+        await this.loadTomorrowReminders()
+      } catch (error) {
+        this.errorMessage = error.message
+        this.runLogs.unshift({
+          at: new Date().toISOString(),
+          stage: 'assistant.confirm',
           status: 'error',
           message: error.message,
         })
@@ -170,6 +285,9 @@ export const useDemoStore = defineStore('demo', {
       try {
         await resetDemoEvents({ user_id: this.userId })
         this.processResult = null
+        this.confirmModalVisible = false
+        this.pendingExecutionPlan = null
+        this.pendingPreviewResult = null
         this.clearAudioPayload()
         this.requestHistory = []
         this.runLogs.unshift({

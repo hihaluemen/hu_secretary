@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('../src/api/events', () => ({
   fetchEvents: vi.fn(async () => []),
   resetDemoEvents: vi.fn(async () => ({ user_id: 'user_001', deleted_count: 0 })),
+  createEventsBatch: vi.fn(async () => ({ status: 'success', detail: [], success_count: 0, fail_count: 0 })),
+  executeUpdateSql: vi.fn(async () => ({ status: 'success', affected_rows: 0 })),
 }))
 
 vi.mock('../src/api/reminders', () => ({

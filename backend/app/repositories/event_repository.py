@@ -1,12 +1,18 @@
+import re
 from typing import Any
 
 import pymysql
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import BadRequestError, NotFoundError
 from app.db.mysql import mysql_conn_context
 
 
 class EventRepository:
+    _UPDATE_EVENTS_SQL_PATTERN = re.compile(
+        r"^update\s+`?events`?\s+set\s+(?P<set_clause>.+?)\s+where\s+(?P<where_clause>.+)$",
+        re.IGNORECASE | re.DOTALL,
+    )
+
     def _normalize_event_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         event_content = str(payload.get("事件内容") or payload.get("event") or "未知活动").strip()
         event_time = str(payload.get("开始时间") or payload.get("event_time") or "").strip()
@@ -22,6 +28,35 @@ class EventRepository:
             "participants": participants,
             "remark": remark,
         }
+
+    def _build_safe_update_sql(self, user_id: str, sql: str) -> tuple[str, tuple[Any, ...]]:
+        normalized_sql = (sql or "").strip()
+        if not normalized_sql:
+            raise BadRequestError(message="更新 SQL 不能为空", code="UPDATE_SQL_EMPTY")
+
+        # Allow one optional trailing semicolon while rejecting multi-statement payloads.
+        if normalized_sql.endswith(";"):
+            normalized_sql = normalized_sql[:-1].strip()
+        if ";" in normalized_sql:
+            raise BadRequestError(message="仅支持单条 UPDATE SQL", code="UPDATE_SQL_MULTIPLE_STATEMENTS")
+
+        if re.search(r"--|/\*|\*/|#", normalized_sql):
+            raise BadRequestError(message="更新 SQL 不允许注释", code="UPDATE_SQL_COMMENT_FORBIDDEN")
+
+        if re.search(r"%\([^)]+\)s|%s", normalized_sql, flags=re.IGNORECASE):
+            raise BadRequestError(message="更新 SQL 不允许参数占位符", code="UPDATE_SQL_PLACEHOLDER_FORBIDDEN")
+
+        match = self._UPDATE_EVENTS_SQL_PATTERN.match(normalized_sql)
+        if not match:
+            raise BadRequestError(message="仅支持 UPDATE events ... WHERE ...", code="UPDATE_SQL_INVALID")
+
+        set_clause = match.group("set_clause").strip()
+        where_clause = match.group("where_clause").strip()
+        if not set_clause or not where_clause:
+            raise BadRequestError(message="更新 SQL 缺少 SET 或 WHERE 子句", code="UPDATE_SQL_INVALID")
+
+        safe_sql = f"UPDATE events SET {set_clause} WHERE ({where_clause}) AND user_id = %s"
+        return safe_sql, (user_id,)
 
     def insert_events(self, user_id: str, events: list[dict[str, Any]]) -> dict[str, Any]:
         success_count = 0
@@ -184,6 +219,15 @@ class EventRepository:
                 )
             conn.commit()
         return self.get_event(event_id, user_id)
+
+    def execute_update_sql(self, user_id: str, sql: str) -> int:
+        safe_sql, params = self._build_safe_update_sql(user_id=user_id, sql=sql)
+        with mysql_conn_context() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(safe_sql, params)
+                affected = cursor.rowcount
+            conn.commit()
+        return affected
 
     def delete_event(self, event_id: int, user_id: str) -> None:
         with mysql_conn_context() as conn:

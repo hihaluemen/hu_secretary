@@ -34,6 +34,14 @@
         <UpdateSqlPreview :loading="store.loading" :sql="store.updateSqlPreview" />
       </div>
     </section>
+
+    <ConfirmActionModal
+      :visible="store.confirmModalVisible"
+      :loading="store.loading"
+      :preview="store.pendingPreviewResult"
+      @cancel="store.cancelPendingExecution"
+      @confirm="store.confirmPendingExecution"
+    />
   </main>
 </template>
 
@@ -41,6 +49,7 @@
 import { onMounted } from 'vue'
 import { ref } from 'vue'
 
+import ConfirmActionModal from '../components/ConfirmActionModal.vue'
 import EventTable from '../components/EventTable.vue'
 import InputPanel from '../components/InputPanel.vue'
 import PipelineResult from '../components/PipelineResult.vue'
